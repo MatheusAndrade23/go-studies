@@ -6,6 +6,8 @@ import (
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"os"
+	"url_shortener/omdb"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -34,6 +36,8 @@ func sendJSON(w http.ResponseWriter, resp Response, status int) {
 
 
 func NewHandler(db map[string]string) http.Handler {
+	apiKey := os.Getenv("OMDB_KEY")
+
 	r := chi.NewMux()
 
 	r.Use(middleware.Recoverer)
@@ -42,6 +46,8 @@ func NewHandler(db map[string]string) http.Handler {
 
 	r.Post("/api/shortener", handlePost(db))
 	r.Get("/{code}", handleGet(db))
+
+	r.Get("/movie/search", handleSearch(apiKey))
 
 	return r
 }
@@ -97,5 +103,23 @@ func handleGet (db map[string]string) http.HandlerFunc {
 		}
 
 		http.Redirect(w, r, data, http.StatusPermanentRedirect)
+	}
+}
+
+func handleSearch (apiKey string) http.HandlerFunc {
+	return func (w http.ResponseWriter, r *http.Request) {
+		search := r.URL.Query().Get("s")
+		res, err := omdb.Search(apiKey, search)
+
+		if err != nil {
+			sendJSON(
+				w,
+				Response{Error: "something went wrong with omdb"},
+				http.StatusBadGateway,
+			)
+			return
+		}
+
+		sendJSON(w, Response{Data: res}, http.StatusOK)
 	}
 }
